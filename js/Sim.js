@@ -12,12 +12,15 @@ define( function( require ) {
 
   var Fort = require( 'FORT/Fort' );
   var Util = require( 'SCENERY/util/Util' );
-  var NavigationBarScene = require( 'JOIST/NavigationBarScene' );
-  var HomeScreenScene = require( 'JOIST/HomeScreenScene' );
+  var NavigationBar = require( 'JOIST/NavigationBar' );
+  var HomeScreen = require( 'JOIST/HomeScreen' );
   var Scene = require( 'SCENERY/Scene' );
   var Node = require( 'SCENERY/nodes/Node' );
-  var Layout = require( 'JOIST/Layout' );
+  var version = require( 'version' );
+
+  //For Data logging and visualization
   var wiretap = require( 'FORT/wiretap' );
+  var LogPointers = require( 'JOIST/share/LogPointers' );
 
   /**
    *
@@ -30,16 +33,19 @@ define( function( require ) {
     var sim = this;
     this.overlays = [];
 
+    this.name = name;
+    this.version = version();
+
     //Set the HTML page title to the localized title
     //TODO: When a sim is embedded on a page, we shouldn't retitle the page
-    $( 'title' ).html( name );
+    $( 'title' ).html( name + " " + this.version ); //TODO i18n of orderπ
 
     //Default values are to show the home screen with the 1st tab selected
     options = options || {};
     var showHomeScreen = ( _.isUndefined( options.showHomeScreen ) ) ? true : options.showHomeScreen;
 
     //If there is only one tab, do not show the home screen
-    if ( tabs.length == 1 ) {
+    if ( tabs.length === 1 ) {
       showHomeScreen = false;
     }
 
@@ -61,8 +67,8 @@ define( function( require ) {
     sim.scene.initializeStandaloneEvents( { batchDOMEvents: true } ); // sets up listeners on the document with preventDefault(), and forwards those events to our scene
     window.simScene = sim.scene; // make the scene available for debugging
 
-    this.navigationBarScene = new NavigationBarScene( this, tabs, sim.simModel );
-    this.homeScreenScene = new HomeScreenScene( this, name, tabs, sim.simModel );
+    this.navigationBar = new NavigationBar( this, tabs, sim.simModel );
+    this.homeScreen = new HomeScreen( name, tabs, sim.simModel );
 
     //The simNode contains the home screen or the play area
     var simNode = new Node();
@@ -72,23 +78,23 @@ define( function( require ) {
     //TODO: Test this after rewriting into multiple divs/scenes
     var viewContainer = new Node( {layerSplit: true} );
 
-    sim.scene.addChild( simNode );
-
     var updateBackground = function() {
-//      var color = sim.simModel.showHomeScreen ? homeScreen.backgroundColor : ( tabs[sim.simModel.tabIndex].backgroundColor || 'white' );
-      $simDiv.css( 'background', tabs[sim.simModel.tabIndex].backgroundColor || 'white' );
+      if ( sim.simModel.showHomeScreen ) {
+        $simDiv.css( 'background', 'black' );
+      }
+      else {
+        $simDiv.css( 'background', tabs[sim.simModel.tabIndex].backgroundColor || 'white' );
+      }
     };
 
     //When the user presses the home icon, then show the home screen, otherwise show the tabNode.
     this.simModel.link( 'showHomeScreen', function( showHomeScreen ) {
       simNode.children = showHomeScreen ? [] : [viewContainer];
       if ( showHomeScreen ) {
-        sim.navigationBarScene.$div.detach();
-        $( 'body' ).append( sim.homeScreenScene.$main );
+        sim.scene.children = [sim.homeScreen];
       }
       else {
-        $( 'body' ).append( sim.navigationBarScene.$div );
-        sim.homeScreenScene.$main.detach();
+        sim.scene.children = [simNode, sim.navigationBar];
       }
       updateBackground();
     } );
@@ -104,12 +110,14 @@ define( function( require ) {
 
       //40 px high on Mobile Safari
       var navBarHeight = scale * 40;
-      sim.navigationBarScene.layout( scale, width, navBarHeight );
-      sim.scene.resize( width, height - navBarHeight );
+      sim.navigationBar.layout( scale, width, navBarHeight );
+      sim.navigationBar.bottom = height;
+      sim.scene.resize( width, height );
 
       //Layout each of the tabs
-      _.each( tabs, function( m ) { m.view.layout( width, height - sim.navigationBarScene.height ); } );
+      _.each( tabs, function( m ) { m.view.layout( width, height - sim.navigationBar.height ); } );
 
+      sim.homeScreen.layout( width, height );
       //Startup can give spurious resizes (seen on ipad), so defer to the animation loop for painting
     }
 
@@ -138,25 +146,40 @@ define( function( require ) {
   Sim.prototype.start = function() {
     var sim = this;
 
+    //Keep track of the previous time for computing dt, and initially signify that time hasn't been recorded yet.
+    var lastTime = -1;
+
     //Make sure requestAnimationFrame is defined
     Util.polyfillRequestAnimationFrame();
+
+    //Record the pointers (if logging is enabled)
+//    var logPointers = new LogPointers();
+//    logPointers.startLogging();
+//
+//    //For debugging, display the pointers
+//    logPointers.showPointers();
 
     // place the rAF *before* the render() to assure as close to 60fps with the setTimeout fallback.
     //http://paulirish.com/2011/requestanimationframe-for-smart-animating/
     (function animationLoop() {
-      requestAnimationFrame( animationLoop );
+      window.requestAnimationFrame( animationLoop );
 
       // if any input events were received and batched, fire them now.
       sim.scene.fireBatchedEvents();
 
       //Update the active tab, but not if the user is on the home screen
       if ( !sim.simModel.showHomeScreen ) {
-        var dt = 0.04;//TODO: put real time elapsed in seconds, this value is required by beers-law-lab
+
+        //Compute the elapsed time since the last frame, or guess 1/60th of a second if it is the first frame
+        var time = Date.now();
+        var elapsedTimeMilliseconds = (lastTime === -1) ? (1000.0 / 60.0) : (time - lastTime);
+        lastTime = time;
+
+        //Convert to seconds
+        var dt = elapsedTimeMilliseconds / 1000.0;
         sim.tabs[sim.simModel.tabIndex].model.step( dt );
       }
       sim.scene.updateScene();
-      sim.navigationBarScene.updateScene();
-      sim.homeScreenScene.updateScene();
       for ( var i = 0; i < sim.overlays.length; i++ ) {
         var overlay = sim.overlays[i];
         overlay.updateScene();
@@ -172,10 +195,13 @@ define( function( require ) {
     //Make sure requestAnimationFrame is defined
     Util.polyfillRequestAnimationFrame();
 
+    //Display the pointers
+//    new LogPointers().showPointers();
+
     // place the rAF *before* the render() to assure as close to 60fps with the setTimeout fallback.
     //http://paulirish.com/2011/requestanimationframe-for-smart-animating/
     (function animationLoop() {
-      requestAnimationFrame( animationLoop );
+      window.requestAnimationFrame( animationLoop );
 
       //Update the sim based on the given log
       logIndex = wiretap.stepUntil( log, playbackTime, logIndex );
@@ -183,8 +209,6 @@ define( function( require ) {
       playbackTime += 17;//ms between frames at 60fp
 
       sim.scene.updateScene();
-      sim.navigationBarScene.updateScene();
-      sim.homeScreenScene.updateScene();
       for ( var i = 0; i < sim.overlays.length; i++ ) {
         var overlay = sim.overlays[i];
         overlay.updateScene();

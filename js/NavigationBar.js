@@ -13,10 +13,8 @@ define( function( require ) {
   var Node = require( 'SCENERY/nodes/Node' );
   var HBox = require( 'SCENERY/nodes/HBox' );
   var Text = require( 'SCENERY/nodes/Text' );
-  var AccessibilityPeer = require( 'SCENERY/util/AccessibilityPeer' );
   var FontAwesomeNode = require( 'SUN/FontAwesomeNode' );
   var BoundsNode = require( 'SUN/BoundsNode' );
-  var Layout = require( 'JOIST/Layout' );
   var Rectangle = require( 'SCENERY/nodes/Rectangle' );
   var inherit = require( 'PHET_CORE/inherit' );
   var SimPopupMenu = require( 'JOIST/SimPopupMenu' );
@@ -24,6 +22,8 @@ define( function( require ) {
   function NavigationBar( sim, tabs, model ) {
     var navigationBar = this;
     Node.call( this, {renderer: 'svg'} );
+    this.background = new Rectangle( 0, 0, 2000, 0, {fill: 'black'} );
+    this.addChild( this.background );
 
     //Space between the icons and the bottom of the play area
     var verticalPadding = 2;
@@ -38,17 +38,18 @@ define( function( require ) {
 
     //Creating the popup menu dynamically (when needed) causes a temporary black screen on the iPad (perhaps because of canvas accurate text bounds)
     var simPopupMenu = new SimPopupMenu( sim );
+    var optionButtonPressed = function() {
+      simPopupMenu.x = navigationBar.navBarWidth - simPopupMenu.width - 2;
+      simPopupMenu.y = window.innerHeight - simPopupMenu.height - navigationBar.height / 2 + 4;
+      var overlayScene = sim.createAndAddOverlay( simPopupMenu );
+      overlayScene.addInputListener( {down: function() {
+        sim.removeOverlay( overlayScene );
+      }} );
+    };
+    optionsButton.addPeer( '<input type="button">', {click: optionButtonPressed, tabIndex: 101} );
     optionsButton.addInputListener( {
                                       // mousedown or touchstart (pointer pressed down over the node)
-                                      down: function( event ) {
-                                        simPopupMenu.x = navigationBar.navBarWidth - simPopupMenu.width - 2;
-                                        simPopupMenu.y = window.innerHeight - simPopupMenu.height - navigationBar.height / 2 + 4;
-                                        var overlayScene = sim.createAndAddOverlay( simPopupMenu );
-                                        overlayScene.addInputListener( {down: function() {
-                                          sim.removeOverlay( overlayScene );
-                                        }} );
-                                      }
-                                    } );
+                                      down: optionButtonPressed                                    } );
 
     this.phetLabelAndButton = new HBox( {spacing: 10, children: [phetLabel, optionsButton]} );
     this.addChild( this.phetLabelAndButton );
@@ -61,19 +62,18 @@ define( function( require ) {
       child.tab = tab;
       child.scale( (100 - verticalPadding * 2) / child.tab.icon.height );
 
-      var textLabel = new Text( tab.name, {fontSize: 26, fill: 'black'} );
-      var outline = new Rectangle( 0, 0, textLabel.width + 10, textLabel.height + 10, 10, 10, {fill: 'white'} );
-      textLabel.centerX = outline.width / 2;
-      textLabel.centerY = outline.height / 2;
-      outline.addChild( textLabel );
+      var textLabel = new Text( tab.name, {fontSize: 26, fill: 'white'} );
 
-      child.largeTextLabel = outline;
+      child.largeTextLabel = textLabel;
       child.smallTextLabel = new Text( tab.name, {fontSize: 10, fill: 'white', visible: true} );
 
-      child.addInputListener( { down: function() {
+      var listener = function() {
         model.tabIndex = tab.index;
         model.showHomeScreen = false;
-      }} );
+      };
+      child.addPeer( '<input type="button">', {click: listener, tabIndex: 99} );
+
+      child.addInputListener( { down: listener} );
       return child;
     } );
 
@@ -86,14 +86,14 @@ define( function( require ) {
         this.addChild( tabChildren[i].smallTextLabel );
       }
     }
-    else if ( tabs.length == 1 ) {
+    else if ( tabs.length === 1 ) {
       this.addChild( tabChildren[0].largeTextLabel );
     }
 
     //add the home icon
     this.homeIcon = new BoundsNode( new FontAwesomeNode( 'home', {fill: '#fff'} ), {cursor: 'pointer'} );
     this.homeIcon.addInputListener( {down: function() { model.showHomeScreen = true; }} );
-    this.homeIcon.accessibilityPeer = new AccessibilityPeer( this.homeIcon, '<input type="button">', {click: function() {model.showHomeScreen = true;}} );
+    this.homeIcon.addPeer( '<input type="button">', {click: function() {model.showHomeScreen = true;}, tabIndex: 100} );
     if ( tabs.length > 1 ) {
       this.addChild( this.homeIcon );
     }
@@ -104,11 +104,14 @@ define( function( require ) {
 
     this.relayout = function() {
       var height = this.navBarHeight;
+      navigationBar.background.rectHeight = height;
       var tabIndex = navigationBar.tabIndex;
       //Update size and opacity of each icon
       var selectedChild = null;
-      for ( var i = 0; i < tabChildren.length; i++ ) {
-        var child = tabChildren[i];
+      var i = 0;
+      var child = null;
+      for ( i = 0; i < tabChildren.length; i++ ) {
+        child = tabChildren[i];
         child.invalidateBounds();
         var selected = tabIndex === child.tab.index;
         child.selected = selected;
@@ -125,9 +128,8 @@ define( function( require ) {
 
       //Compute layout bounds
       var width = 0;
-      for ( var i = 0; i < tabChildren.length; i++ ) {
-        var child = tabChildren[i];
-        width = width + child.width;
+      for ( i = 0; i < tabChildren.length; i++ ) {
+        width = width + tabChildren[i].width;
       }
       var spacing = 10;
       width = width + spacing * (tabChildren.length - 1);
@@ -136,7 +138,7 @@ define( function( require ) {
       selectedChild.largeTextLabel.centerY = this.navBarHeight / 2;
 
       //Lay out the components from left to right
-      if ( tabs.length == 1 ) {
+      if ( tabs.length === 1 ) {
         selectedChild.largeTextLabel.left = 15;
       }
       else {
@@ -145,8 +147,8 @@ define( function( require ) {
         var x = this.navBarWidth / 2 - width / 2;
         selectedChild.largeTextLabel.right = x - 25;
 
-        for ( var i = 0; i < tabChildren.length; i++ ) {
-          var child = tabChildren[i];
+        for ( i = 0; i < tabChildren.length; i++ ) {
+          child = tabChildren[i];
           child.x = x;
           child.y = verticalPadding;
           child.smallTextLabel.visible = (selectedChild !== child);

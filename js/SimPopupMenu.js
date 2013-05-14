@@ -16,7 +16,6 @@ define( function( require ) {
   var VBox = require( 'SCENERY/nodes/VBox' );
   var Text = require( 'SCENERY/nodes/Text' );
   var inherit = require( 'PHET_CORE/inherit' );
-  var Layout = require( 'JOIST/Layout' );
   var AboutDialog = require( 'JOIST/AboutDialog' );
   var Rectangle = require( 'SCENERY/nodes/Rectangle' );
   var Button = require( 'SUN/Button' );
@@ -28,7 +27,7 @@ define( function( require ) {
     Node.call( this );
 
     //Create it statically (even though it may not be used) because creating it dynamically can cause flickering on iPad//TODO: Fix this
-    var aboutDialog = new AboutDialog();
+    var aboutDialog = new AboutDialog( sim );
 
     var fontSize = '36px';
     var homePageText = new Text( 'PhET Homepage', {fontSize: fontSize} ).addInputListener( {down: function() {
