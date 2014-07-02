@@ -23,6 +23,18 @@ define( function( require ) {
   var Timer = require( 'JOIST/Timer' );
   var SimJSON = require( 'JOIST/SimJSON' );
 
+  //TODO: Is there a better place for this declaration?
+  window.phetEvents = window.phetEvents || {
+
+    //Flag that indicates the sim is not instrumented for a data-driven study.  Provides short-circuiting for lines like: phetEvents.active && (...)
+    active: false,
+
+    //Just return the callback directly.
+    wrap: function( name, callback ) {
+      return callback;
+    }
+  };
+
   /**
    * @param {String} name
    * @param {Array<Screen>} screens
@@ -157,7 +169,7 @@ define( function( require ) {
     this.showPointerAreasProperty.link( function( showPointerAreas ) {
       sim.scene.setPointerAreaDisplayVisible( showPointerAreas );
     } );
-    
+
     function sleep( millis ) {
       var date = new Date();
       var curDate;
@@ -165,6 +177,7 @@ define( function( require ) {
         curDate = new Date();
       } while ( curDate - date < millis );
     }
+
     window.makeEverythingSlow = function() {
       window.setInterval( function() { sleep( 64 ); }, 16 );
     };
