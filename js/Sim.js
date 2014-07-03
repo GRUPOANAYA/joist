@@ -32,7 +32,9 @@ define( function( require ) {
     //Just return the callback directly.
     wrap: function( name, callback ) {
       return callback;
-    }
+    },
+
+    trigger: function() {}
   };
 
   /**
