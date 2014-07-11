@@ -133,6 +133,14 @@ define( function( require ) {
       options.screenIndex = 0;
     }
 
+    phetEvents.active && phetEvents.start( 'simStarted', {
+      studentId: window.phetcommon.getQueryParameter( 'studentId' ),
+      options: options,
+      simName: sim.name,
+      simVersion: sim.version,
+      url: window.location.href
+    } );
+
     //Default values are to show the home screen with the 1st screen selected
     var showHomeScreen = ( _.isUndefined( options.showHomeScreen ) ) ? true : options.showHomeScreen;
 
@@ -312,6 +320,8 @@ define( function( require ) {
     //Fit to the window and render the initial scene
     $( window ).resize( function() { sim.resizeToWindow(); } );
     sim.resizeToWindow();
+
+    phetEvents.active && phetEvents.end();
   }
 
   Sim.prototype = {
