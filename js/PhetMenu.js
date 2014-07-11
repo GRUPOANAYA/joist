@@ -212,6 +212,16 @@ define( function( require ) {
           } );
         }
       },
+
+      // "Done" button
+      {
+        text: options.doneButtonLabel,
+        present: options.doneButtonURL,
+        immediateCallback: function() {
+          var url = options.doneButtonURL + ( options.doneButtonURL.indexOf( '?' ) >= 0 ? '&' : '?' ) + 'studentId=' + encodeURIComponent( window.phetcommon.getQueryParameter( 'studentId' ) );
+          window.location.href = url;
+        }
+      },
       {
         text: aboutString,
         present: isPhETBrand,

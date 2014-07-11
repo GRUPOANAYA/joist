@@ -86,6 +86,16 @@ define( function( require ) {
       options.showHomeScreen = stringToBoolean( window.phetcommon.getQueryParameter( 'showHomeScreen' ) );
     }
 
+    // Custom "Done" button label
+    if ( window.phetcommon && window.phetcommon.getQueryParameter && window.phetcommon.getQueryParameter( 'doneButtonLabel' ) ) {
+      options.doneButtonLabel = window.phetcommon.getQueryParameter( 'doneButtonLabel' );
+    }
+
+    // Custom "Done" button URL when clicked
+    if ( window.phetcommon && window.phetcommon.getQueryParameter && window.phetcommon.getQueryParameter( 'doneButtonURL' ) ) {
+      options.doneButtonURL = window.phetcommon.getQueryParameter( 'doneButtonURL' );
+    }
+
     // Option for profiling
     if ( window.phetcommon && window.phetcommon.getQueryParameter && window.phetcommon.getQueryParameter( 'profile' ) ) {
       options.profile = true;
