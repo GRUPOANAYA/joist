@@ -15,6 +15,7 @@ define( function( require ) {
   var Text = require( 'SCENERY/nodes/Text' );
   var inherit = require( 'PHET_CORE/inherit' );
   var AboutDialog = require( 'JOIST/AboutDialog' );
+  var AreYouSureDialog = require( 'JOIST/AreYouSureDialog' );
   var SettingsDialog = require( 'JOIST/SettingsDialog' );
   var Rectangle = require( 'SCENERY/nodes/Rectangle' );
   var ButtonListener = require( 'SCENERY/input/ButtonListener' );
@@ -217,10 +218,7 @@ define( function( require ) {
       {
         text: options.doneButtonLabel,
         present: options.doneButtonURL,
-        immediateCallback: function() {
-          var url = options.doneButtonURL + ( options.doneButtonURL.indexOf( '?' ) >= 0 ? '&' : '?' ) + 'studentId=' + encodeURIComponent( window.phetcommon.getQueryParameter( 'studentId' ) );
-          window.location.href = url;
-        }
+        callback: function() { showAboutDialog( new AreYouSureDialog( options ) ); }
       },
       {
         text: aboutString,
