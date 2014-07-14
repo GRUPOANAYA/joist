@@ -102,7 +102,7 @@ define( function( require ) {
     }
 
     if ( window.phetcommon && window.phetcommon.getQueryParameter && window.phetcommon.getQueryParameter( 'screenIndex' ) ) {
-      options.screenIndex = parseInt( window.phetcommon.getQueryParameter( 'screenIndex' ), 10 );
+      options.screenIndex = parseInt( window.phetcommon.getQueryParameter( 'screenIndex' ) );
     }
     if ( window.phetcommon && window.phetcommon.getQueryParameter && window.phetcommon.getQueryParameter( 'recordInputEventLog' ) ) {
       // enables recording of Scenery's input events, request animation frames, and dt's so the sim can be played back
@@ -140,6 +140,15 @@ define( function( require ) {
       simVersion: sim.version,
       url: window.location.href
     } );
+
+    //If specifying 'screens' then use 1-based (not zero-based) and "." delimited string such as "1.3.4" to get the 1st, 3rd and 4th screen
+    if ( window.phetcommon && window.phetcommon.getQueryParameter && window.phetcommon.getQueryParameter( 'screens' ) ) {
+      var screensValueString = window.phetcommon.getQueryParameter( 'screens' );
+      screens = screensValueString.split( '.' ).map( function( screenString ) {
+        return screens[parseInt( screenString ) - 1];
+      } );
+      options.screenIndex = 0;
+    }
 
     //Default values are to show the home screen with the 1st screen selected
     var showHomeScreen = ( _.isUndefined( options.showHomeScreen ) ) ? true : options.showHomeScreen;
