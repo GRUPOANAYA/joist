@@ -71,7 +71,8 @@ define( function( require ) {
       children.push( createCreditsNode( sim.credits ) );
     }
 
-    if ( Brand.links && Brand.links.length ) {
+    //Show the links from Brand (but not for phetEvents, since those sims have different licenses.)
+    if ( Brand.links && Brand.links.length && !phetEvents.active ) {
       children.push( new VStrut( 15 ) );
       for ( var i = 0; i < Brand.links.length; i++ ) {
         var link = Brand.links[i];
