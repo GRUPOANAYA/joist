@@ -22,6 +22,9 @@ define( function( require ) {
   var platform = require( 'PHET_CORE/platform' );
   var Timer = require( 'JOIST/Timer' );
   var SimJSON = require( 'JOIST/SimJSON' );
+  var Path = require( 'SCENERY/nodes/Path' );
+  var Shape = require( 'KITE/Shape' );
+  var Profiler = require( 'JOIST/Profiler' );
 
   //TODO: Is there a better place for this declaration?
   window.phetEvents = window.phetEvents || {
@@ -40,20 +43,34 @@ define( function( require ) {
   /**
    * @param {String} name
    * @param {Array<Screen>} screens
-   * @param options optional parameters for starting screen and home values, so that developers can easily specify the startup scenario for quick development
+   * @param {Object} [options]
    * @constructor
    */
   function Sim( name, screens, options ) {
 
-    options = _.extend( { showHomeScreen: true, screenIndex: 0, standalone: false, credits: {},
+    assert && assert( window.phetJoistSimLauncher, 'Sim must be launched using SimLauncher, see https://github.com/phetsims/joist/issues/142' );
+
+    options = _.extend( {
+      showHomeScreen: true, // whether to show the home screen, or go immediately to the screen indicated by screenIndex
+      screenIndex: 0, // index of the screen that will be selected at startup
+      standalone: false, // whether to run the screen indicated by screenIndex as a standalone sim
+      credits: {}, // credits, see AboutDialog for format
+
+      // if true, prints screen initialization time (total, model, view) to the console and displays
+      // profiling information on the screen
+      profiler: false,
+
+      recordInputEventLog: false, // if true, records the scenery input events and sends them to a server that can store them
+      inputEventLogName: undefined, // when playing back a recorded scenery input event log, use the specified filename.  Please see getEventLogName for more
 
       //The screen display strategy chooses which way to switch screens, using setVisible or setChildren.
       //setVisible is faster in scenery 0.1 but crashes some apps due to memory restrictions, so some apps need to specify 'setChildren'
       //See https://github.com/phetsims/joist/issues/96
       screenDisplayStrategy: 'setVisible',
-      showSaveAndLoad: false
+      showSaveAndLoad: false, // this function is currently (9-5-2014) specific to Energy Skate Park: Basics, which shows Save/Load buttons in the PhET menu.  This interface is not very finalized and will probably be changed for future versions, so don't rely on it.
+      showSmallHomeScreenIconFrame: false // If true, there will be a border shown around the home screen icons.  Use this option if the home screen icons have the same color as the backrgound, as in Color Vision.
     }, options );
-    this.options = options; // store this for access from prototype functions, assumes that it won't be changed later
+    this.options = options; // @private store this for access from prototype functions, assumes that it won't be changed later
 
     this.destroyed = false;
     var sim = this;
@@ -73,6 +90,14 @@ define( function( require ) {
     sim.fuzzMouseIsDown = false;
     sim.fuzzMousePosition = new Vector2(); // start at 0,0
     sim.fuzzMouseLastMoved = false; // whether the last mouse event was a move (we skew probabilities based on this)
+
+    // Option for simulating context loss in WebGL using the khronos webgl-debug tools,
+    // see https://github.com/phetsims/scenery/issues/279
+    sim.webglMakeLostContextSimulatingCanvas = false;
+
+    // Option to incrementally lose context between adjacent gl calls after the 1st context loss
+    // see https://github.com/phetsims/scenery/issues/279
+    sim.webglContextLossIncremental = false;
 
     //Set the HTML page title to the localized title
     //TODO: When a sim is embedded on a page, we shouldn't retitle the page
@@ -97,8 +122,8 @@ define( function( require ) {
     }
 
     // Option for profiling
-    if ( window.phetcommon && window.phetcommon.getQueryParameter && window.phetcommon.getQueryParameter( 'profile' ) ) {
-      options.profile = true;
+    if ( window.phetcommon && window.phetcommon.getQueryParameter && window.phetcommon.getQueryParameter( 'profiler' ) ) {
+      options.profiler = true;
     }
 
     if ( window.phetcommon && window.phetcommon.getQueryParameter && window.phetcommon.getQueryParameter( 'screenIndex' ) ) {
@@ -150,6 +175,29 @@ define( function( require ) {
       options.screenIndex = 0;
     }
 
+    // If specifying 'webglContextLossTimeout' then start a timer that will elapse in that number of milliseconds and simulate
+    // WebGL context loss on all WebGL Layers
+    var webglContextLossTimeoutString = window.phetcommon.getQueryParameter( 'webglContextLossTimeout' );
+    if ( window.phetcommon && window.phetcommon.getQueryParameter && webglContextLossTimeoutString ) {
+
+      // Enabled the canvas contexts for context loss
+      sim.webglMakeLostContextSimulatingCanvas = true;
+
+      // If a time was specified, additionally start a timer that will simulate the context loss.
+      if ( webglContextLossTimeoutString !== 'undefined' ) {
+        var time = parseInt( webglContextLossTimeoutString, 10 );
+        console.log( 'simulating context loss in ' + time + 'ms' );
+        window.setTimeout( function() {
+          console.log( 'simulating context loss' );
+          sim.scene.simulateWebGLContextLoss();
+        }, time );
+      }
+    }
+
+    if ( window.phetcommon && window.phetcommon.getQueryParameter && window.phetcommon.getQueryParameter( 'webglContextLossIncremental' ) ) {
+      sim.webglContextLossIncremental = true;
+    }
+
     //Default values are to show the home screen with the 1st screen selected
     var showHomeScreen = ( _.isUndefined( options.showHomeScreen ) ) ? true : options.showHomeScreen;
 
@@ -179,7 +227,12 @@ define( function( require ) {
 
     //Create the scene
     //Leave accessibility as a flag while in development
-    sim.scene = new Scene( $simDiv, {allowDevicePixelRatioScaling: false, accessible: true} );
+    sim.scene = new Scene( $simDiv, {
+      allowDevicePixelRatioScaling: false,
+      accessible: true,
+      webglMakeLostContextSimulatingCanvas: sim.webglMakeLostContextSimulatingCanvas,
+      webglContextLossIncremental: sim.webglContextLossIncremental
+    } );
     sim.scene.sim = sim; // add a reference back to the simulation
     sim.scene.initializeWindowEvents( { batchDOMEvents: true } ); // sets up listeners on the document with preventDefault(), and forwards those events to our scene
     if ( options.recordInputEventLog ) {
@@ -217,8 +270,16 @@ define( function( require ) {
     var whiteNavBar = screens[0].backgroundColor === 'black' || screens[0].backgroundColor === '#000' || screens[0].backgroundColor === '#000000';
     sim.navigationBar = new NavigationBar( sim, screens, sim.simModel, whiteNavBar );
 
+    // Multi-screen sims get a home screen.
     if ( screens.length > 1 ) {
-      sim.homeScreen = new HomeScreen( sim );
+      sim.homeScreen = new HomeScreen( sim, {
+        showSmallHomeScreenIconFrame: options.showSmallHomeScreenIconFrame
+      } );
+
+      // Show the layoutBounds, see #145
+      if ( window.phetcommon.getQueryParameter( 'dev' ) ) {
+        sim.homeScreen.addChild( new Path( Shape.bounds( sim.homeScreen.layoutBounds ), { stroke: 'red', lineWidth: 3, pickable: false } ) );
+      }
     }
 
     var updateBackground = function() {
@@ -236,16 +297,22 @@ define( function( require ) {
     //Currently this is done eagerly, but this pattern leaves open the door for loading things in the background.
     _.each( screens, function( screen, index ) {
 
-      //Create each model & view, and keep track of the amount of time it took to create each, which is displayed if 'profile' is enabled as a query parameter
+      //Create each model & view, and keep track of the amount of time it took to create each, which is displayed if 'profiler' is enabled as a query parameter
       var start = Date.now();
 
       screen.model = screen.createModel();
       var modelCreated = Date.now();
 
       screen.view = screen.createView( screen.model );
+
+      // Show the layoutBounds, see #145
+      if ( window.phetcommon.getQueryParameter( 'dev' ) ) {
+        screen.view.addChild( new Path( Shape.bounds( screen.view.layoutBounds ), { stroke: 'red', lineWidth: 3, pickable: false } ) );
+      }
+
       var viewCreated = Date.now();
 
-      if ( options.profile ) {
+      if ( options.profiler ) {
         console.log( 'screen ' + index + ' created, total time: ' + (viewCreated - start) + 'ms, model: ' + (modelCreated - start) + 'ms, view: ' + (viewCreated - modelCreated) + 'ms' );
       }
     } );
@@ -398,10 +465,16 @@ define( function( require ) {
 //    //For debugging, display the pointers
 //    logPointers.showPointers();
 
+      if ( sim.options.profiler ) {
+        sim.profiler = new Profiler( sim );
+      }
+
       // place the rAF *before* the render() to assure as close to 60fps with the setTimeout fallback.
       //http://paulirish.com/2011/requestanimationframe-for-smart-animating/
       (function animationLoop() {
         var dt, screen;
+
+        sim.profiler && sim.profiler.frameStarted();
 
         // increment this before we can have an exception thrown, to see if we are missing frames
         sim.frameCounter++;
@@ -469,6 +542,8 @@ define( function( require ) {
           sim.scene.input.eventLog = []; // clears the event log so that future actions will fill it
         }
         sim.scene.updateScene();
+
+        sim.profiler && sim.profiler.frameEnded();
       })();
 
       //If state was specified, load it now
