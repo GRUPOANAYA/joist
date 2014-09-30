@@ -37,7 +37,11 @@ define( function( require ) {
       return callback;
     },
 
-    trigger: function() {}
+    trigger: function() {},
+
+    start: function() {},
+
+    end: function() {}
   };
 
   /**
