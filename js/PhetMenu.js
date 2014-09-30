@@ -214,7 +214,7 @@ define( function( require ) {
         }
       },
 
-      // "Done" button
+      // "Done" button, used in data collection studies
       {
         text: options.doneButtonLabel,
         present: options.doneButtonURL,
