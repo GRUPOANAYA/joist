@@ -38,14 +38,14 @@ define( function( require ) {
 
     //Renderer must be specified here because the node is added directly to the scene (instead of to some other node that already has svg renderer
     Node.call( this, {renderer: 'svg'} );
-    this.background = new Rectangle( 0, 0, 0, 0, { pickable: false } );
+    this.background = new Rectangle( 0, 0, 0, 1, { pickable: false } );
     this.addChild( this.background );
     sim.link( 'useInvertedColors', function( whiteColorScheme ) {
-      thisNode.background.fill = whiteColorScheme ? 'white' : 'black';
+      thisNode.background.fill = 'gray';
     } );
 
     this.phetButton = new PhetButton( sim, false );
-    this.addChild( this.phetButton );
+//    this.addChild( this.phetButton );
 
     this.titleLabel = new Text( sim.name, { font: new PhetFont( 18 ), pickable: false } );
     this.addChild( this.titleLabel );
@@ -66,16 +66,16 @@ define( function( require ) {
         return new NavigationBarScreenButton( sim, screen, thisNode.navBarHeight, maxWidth );
       } );
 
-      this.buttonHBox = new HBox( {children: buttons, spacing: 4} );
+      this.buttonHBox = new HBox( {children: buttons, spacing: 4, y: 20} );
       this.addChild( this.buttonHBox );
 
       //add the home icon
       this.normalHomeIcon = new HomeButton( 'white', 'gray', false );
       this.normalHomeIcon.addListener( function() { model.showHomeScreen = true; } );
-      this.addChild( this.normalHomeIcon );
+//      this.addChild( this.normalHomeIcon );
       this.invertedHomeIcon = new HomeButton( '#222', '#444', true );
       this.invertedHomeIcon.addListener( function() { model.showHomeScreen = true; } );
-      this.addChild( this.invertedHomeIcon );
+//      this.addChild( this.invertedHomeIcon );
       sim.link( 'useInvertedColors', function( whiteColorScheme ) {
         thisNode.normalHomeIcon.visible = !whiteColorScheme;
         thisNode.invertedHomeIcon.visible = whiteColorScheme;
@@ -86,7 +86,8 @@ define( function( require ) {
   return inherit( Node, NavigationBar, {
     relayout: function() {
       var navigationBar = this;
-      navigationBar.background.rectHeight = this.navBarHeight;
+      navigationBar.background.rectHeight = 1;
+      navigationBar.background.rectY = this.navBarHeight - 20;
       navigationBar.background.rectWidth = this.navBarWidth;
 
       if ( this.buttonHBox ) {
@@ -103,8 +104,8 @@ define( function( require ) {
       if ( this.screens.length !== 1 ) {
 
         //put the center right in the middle
-        this.buttonHBox.centerX = this.navBarWidth / 2;
-        this.buttonHBox.top = 2;
+        this.buttonHBox.left = 20;
+        this.buttonHBox.top = 10;
 
         //Center the home icon vertically and make it a bit larger than the icons and text, see https://github.com/phetsims/joist/issues/127
         navigationBar.normalHomeIcon.setScaleMagnitude( this.navBarScale * 1.1 );

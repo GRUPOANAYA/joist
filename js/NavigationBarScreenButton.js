@@ -11,6 +11,7 @@ define( function( require ) {
 
   var Node = require( 'SCENERY/nodes/Node' );
   var VBox = require( 'SCENERY/nodes/VBox' );
+  var HBox = require( 'SCENERY/nodes/HBox' );
   var Rectangle = require( 'SCENERY/nodes/Rectangle' );
   var Text = require( 'SCENERY/nodes/Text' );
   var inherit = require( 'PHET_CORE/inherit' );
@@ -18,6 +19,7 @@ define( function( require ) {
   var PushButtonModel = require( 'SUN/buttons/PushButtonModel' );
   var ButtonListener = require( 'SUN/buttons/ButtonListener' );
   var Multilink = require( 'AXON/Multilink' );
+  var PhetFont = require( 'SCENERY_PHET/PhetFont' );
 
   /**
    * Create a nav bar.  Layout assumes all of the screen widths are the same.
@@ -31,7 +33,7 @@ define( function( require ) {
       cursor: 'pointer'
     } );
 
-    var icon = new Node( {children: [screen.navigationBarIcon], scale: ( 0.625 * navBarHeight ) / screen.navigationBarIcon.height} );
+    var icon = new Node( {children: [], scale: 1} );
 
     var selected = sim.simModel.screenIndexProperty.valueEquals( sim.screens.indexOf( screen ) );
     var buttonModel = new PushButtonModel( {
@@ -41,10 +43,12 @@ define( function( require ) {
     } );
     this.addInputListener( new ButtonListener( buttonModel ) );
 
-    var text = new Text( screen.name );
+    var text = new Text( screen.name, {font: new PhetFont( 18 )} );
+
+    var plusMinus = new Text( '+', {font: new PhetFont( 18 )} );
 
     var box = new VBox( {
-      children: [icon, text],
+      children: [new HBox( {spacing: 4, children: [text, plusMinus]} )],
       pickable: false,
       usesOpacity: true // hint, since we change its opacity
     } );
@@ -66,19 +70,20 @@ define( function( require ) {
     } );
 
     this.addChild( box );
-    this.addChild( normalHighlight );
-    this.addChild( invertedHighlight );
+//    this.addChild( normalHighlight );
+//    this.addChild( invertedHighlight );
     this.addChild( overlay );
 
     this.multilink = new Multilink( [selected, buttonModel.downProperty, buttonModel.overProperty, sim.useInvertedColorsProperty], function update() {
       // Color match yellow with the PhET Logo
-      var selectedTextColor = sim.useInvertedColors ? 'black' : '#f2e916';
-      var unselectedTextColor = sim.useInvertedColors ? 'gray' : 'white';
+      var selectedTextColor = sim.useInvertedColors ? 'black' : 'black';
+      var unselectedTextColor = sim.useInvertedColors ? 'gray' : 'gray';
 
       text.fill = selected.get() ? selectedTextColor : unselectedTextColor;
       box.opacity = selected.get() ? 1.0 : buttonModel.down ? 0.65 : 0.5;
       normalHighlight.visible = !sim.useInvertedColors && ( buttonModel.over || buttonModel.down );
       invertedHighlight.visible = sim.useInvertedColors && ( buttonModel.over || buttonModel.down );
+      plusMinus.text = selected.value ? '+' : '-';
     } );
   }
 

@@ -499,13 +499,16 @@ define( function( require ) {
       //40 px high on Mobile Safari
       var navBarHeight = scale * 40;
       sim.navigationBar.layout( scale, width, navBarHeight, height );
-      sim.navigationBar.y = height - navBarHeight;
+      sim.navigationBar.y = 0;
       sim.scene.resize( width, height );
 
       var screenHeight = height - sim.navigationBar.height;
 
       //Layout each of the screens
-      _.each( sim.screens, function( m ) { m.view.layout( width, screenHeight ); } );
+      _.each( sim.screens, function( m ) {
+        m.view.layout( width, screenHeight );
+        m.view.y = sim.navigationBar.height;
+      } );
 
       if ( sim.homeScreen ) {
         sim.homeScreen.layoutWithScale( scale, width, height );
