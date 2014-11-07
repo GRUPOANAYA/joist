@@ -542,6 +542,8 @@ define( function( require ) {
     start: function() {
       var sim = this;
 
+      sim.mode = 'recording';
+
       // if the playback flag is set, don't start up like normal. instead download our event log from the server and play it back.
       // if direct playback (copy-paste) is desired, please directly call sim.startInputEventPlayback( ... ) instead of sim.start().
       if ( this.options.playbackInputEventLog ) {
@@ -615,23 +617,26 @@ define( function( require ) {
         dt = elapsedTimeMilliseconds / 1000.0;
 
         //Update the active screen, but not if the user is on the home screen
-        if ( !sim.simModel.showHomeScreen ) {
-          // step model and view (both optional)
-          screen = sim.screens[sim.simModel.screenIndex];
-          if ( screen.model.step ) {
-            screen.model.step( dt );
+        if ( sim.mode === 'recording' ) {
+          if ( !sim.simModel.showHomeScreen ) {
+            // step model and view (both optional)
+            screen = sim.screens[sim.simModel.screenIndex];
+            if ( screen.model.step ) {
+              screen.model.step( dt );
+            }
+            if ( screen.view.step ) {
+              screen.view.step( dt );
+            }
           }
-          if ( screen.view.step ) {
-            screen.view.step( dt );
+
+          Timer.step( dt );
+
+
+          //If using the TWEEN animation library, then update all of the tweens (if any) before rendering the scene.
+          //Update the tweens after the model is updated but before the scene is redrawn.
+          if ( window.TWEEN ) {
+            window.TWEEN.update();
           }
-        }
-
-        Timer.step( dt );
-
-        //If using the TWEEN animation library, then update all of the tweens (if any) before rendering the scene.
-        //Update the tweens after the model is updated but before the scene is redrawn.
-        if ( window.TWEEN ) {
-          window.TWEEN.update();
         }
         if ( sim.options.recordInputEventLog ) {
           // push a frame entry into our inputEventLog
@@ -650,6 +655,28 @@ define( function( require ) {
           sim.inputEventLog.push( entry );
           sim.scene.input.eventLog = []; // clears the event log so that future actions will fill it
         }
+
+        if ( sim.mode === 'recording' ) {
+          sim.states = sim.states || [];
+
+          if ( sim.states.length < 1000 ) {
+            var state = sim.getState();
+            sim.states.push( JSON.stringify( state, SimJSON.replacer ) );
+          }
+          else {
+            sim.mode = 'playback';
+          }
+        }
+
+        else {
+          sim.playbackIndex = sim.playbackIndex || 0;
+
+          var decoded = sim.states[sim.playbackIndex];
+          var state = JSON.parse( decoded, SimJSON.reviver );
+          sim.setState( state );
+          sim.playbackIndex++;
+        }
+
         sim.scene.updateScene();
 
         sim.profiler && sim.profiler.frameEnded();
