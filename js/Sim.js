@@ -33,7 +33,7 @@ define( function( require ) {
   var Profiler = require( 'JOIST/Profiler' );
 
   // The SimIFrameAPI is currently private, so we must only load it if it is available
-  var SimIFrameAPI = null;
+  var SimIFrameAPI = window.SimIFrameAPI || null;
 
   /**
    * @param {string} name
@@ -69,6 +69,9 @@ define( function( require ) {
       // Set to false for when the sim will be controlled externally, such as through record/playback or other controls.
       active: true
     } );
+
+    // Changing the screen fails for ESPB due to circular reference in json to string
+    this.currentScreenProperty.setSendPhetEvents && this.currentScreenProperty.setSendPhetEvents( false );
 
     // Load the Sim iframe API, if it was enabled by a query parameter
     if ( SimIFrameAPI ) {
