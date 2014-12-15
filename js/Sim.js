@@ -32,6 +32,9 @@ define( function( require ) {
   var Shape = require( 'KITE/Shape' );
   var Profiler = require( 'JOIST/Profiler' );
 
+  // The SimIFrameAPI is currently private, so we must only load it if it is available
+  var SimIFrameAPI = null;
+
   /**
    * @param {string} name
    * @param {Screen[]} screens
@@ -42,6 +45,7 @@ define( function( require ) {
    * - resized( bounds, screenBounds, scale ): Fires when the sim is resized.
    */
   function Sim( name, screens, options ) {
+    var sim = this;
 
     PropertySet.call( this, {
 
@@ -58,8 +62,18 @@ define( function( require ) {
       currentScreen: null,
 
       // [read-only] {boolean} - Whether our navbar and UI are currently using the inverted (white) style
-      useInvertedColors: false
+      useInvertedColors: false,
+
+      // Flag for if the sim is active (alive) and the user is able to interact with the sim.
+      // If the sim is active, the model.step, view.step, Timer and TWEEN will run.
+      // Set to false for when the sim will be controlled externally, such as through record/playback or other controls.
+      active: true
     } );
+
+    // Load the Sim iframe API, if it was enabled by a query parameter
+    if ( SimIFrameAPI ) {
+      SimIFrameAPI.initialize( this );
+    }
 
     assert && assert( window.phetJoistSimLauncher, 'Sim must be launched using SimLauncher, see https://github.com/phetsims/joist/issues/142' );
 
@@ -77,8 +91,11 @@ define( function( require ) {
       // credits, see AboutDialog for format
       credits: {},
 
-      // a node placed into the Options dialog (if available)
+      // a {Node} placed into the Options dialog (if available)
       optionsNode: null,
+
+      // a {Node} placed onto the home screen (if available)
+      homeScreenWarningNode: null,
 
       // if true, prints screen initialization time (total, model, view) to the console and displays
       // profiling information on the screen
@@ -107,7 +124,6 @@ define( function( require ) {
     this.options = options; // @private store this for access from prototype functions, assumes that it won't be changed later
 
     this.destroyed = false;
-    var sim = this;
 
     // global namespace for accessing the sim
     window.phet = window.phet || {};
@@ -235,6 +251,11 @@ define( function( require ) {
     $body.append( $simDiv );
     this.$simDiv = $simDiv;
 
+    // for preventing Safari from going to sleep. see https://github.com/phetsims/joist/issues/140
+    var heartbeatDiv = this.heartbeatDiv = document.createElement( 'div' );
+    heartbeatDiv.style.opacity = 0;
+    document.body.appendChild( heartbeatDiv );
+
     //Create the scene
     //Leave accessibility as a flag while in development
     sim.scene = new Scene( $simDiv, {
@@ -299,6 +320,7 @@ define( function( require ) {
     // Multi-screen sims get a home screen.
     if ( screens.length > 1 ) {
       sim.homeScreen = new HomeScreen( sim, {
+        warningNode: options.homeScreenWarningNode,
         showSmallHomeScreenIconFrame: options.showSmallHomeScreenIconFrame
       } );
 
@@ -422,6 +444,9 @@ define( function( require ) {
         }
         updateBackground();
       } );
+    }
+    else {
+      throw new Error( "invalid value for options.screenDisplayStrategy: " + options.screenDisplayStrategy );
     }
 
     // layer for popups, dialogs, and their backgrounds and barriers
@@ -577,6 +602,11 @@ define( function( require ) {
 
         phetAllocation && phetAllocation( 'loop' );
 
+        // prevent Safari from going to sleep, see https://github.com/phetsims/joist/issues/140
+        if ( sim.frameCounter % 1000 === 0 ) {
+          sim.heartbeatDiv.innerHTML = Math.random();
+        }
+
         // fire or synthesize input events
         if ( sim.options.fuzzMouse ) {
           sim.fuzzMouseEvents();
@@ -585,8 +615,17 @@ define( function( require ) {
           // TODO: we need more state tracking of individual touch points to do this properly
         }
         else {
-          // if any input events were received and batched, fire them now.
-          sim.scene.fireBatchedEvents();
+          // if any input events were received and batched, fire them now, but only if the sim is active
+          // The sim may be inactive if interactivity was disabled by API usage such as the SimIFrameAPI
+          if ( sim.active ) {
+            sim.scene.fireBatchedEvents();
+          }
+          else {
+
+            // If the sim was inactive (locked), then discard any scenery events instead of buffering them and applying
+            // them later.
+            sim.scene.clearBatchedEvents();
+          }
         }
 
         //Compute the elapsed time since the last frame, or guess 1/60th of a second if it is the first frame
@@ -597,24 +636,30 @@ define( function( require ) {
         //Convert to seconds
         dt = elapsedTimeMilliseconds / 1000.0;
 
-        //Update the active screen, but not if the user is on the home screen
-        if ( !sim.simModel.showHomeScreen ) {
-          // step model and view (both optional)
-          screen = sim.screens[sim.simModel.screenIndex];
-          if ( screen.model.step ) {
-            screen.model.step( dt );
-          }
-          if ( screen.view.step ) {
-            screen.view.step( dt );
-          }
-        }
+        // Step the models, timers and tweens, but only if the sim is active.
+        // It may be inactive if it has been paused through the SimIFrameAPI
+        if ( sim.active ) {
 
-        Timer.step( dt );
+          //Update the active screen, but not if the user is on the home screen
+          if ( !sim.simModel.showHomeScreen ) {
+            // step model and view (both optional)
+            screen = sim.screens[sim.simModel.screenIndex];
+            if ( screen.model.step ) {
+              screen.model.step( dt );
+            }
+            if ( screen.view.step ) {
+              screen.view.step( dt );
+            }
+          }
 
-        //If using the TWEEN animation library, then update all of the tweens (if any) before rendering the scene.
-        //Update the tweens after the model is updated but before the scene is redrawn.
-        if ( window.TWEEN ) {
-          window.TWEEN.update();
+          Timer.step( dt );
+
+          //If using the TWEEN animation library, then update all of the tweens (if any) before rendering the scene.
+          //Update the tweens after the model is updated but before the scene is redrawn.
+          if ( window.TWEEN ) {
+            window.TWEEN.update();
+          }
+
         }
         if ( sim.options.recordInputEventLog ) {
           // push a frame entry into our inputEventLog
@@ -636,6 +681,8 @@ define( function( require ) {
         sim.scene.updateScene();
 
         sim.profiler && sim.profiler.frameEnded();
+
+        sim.trigger( 'frameCompleted' );
       })();
 
       //If state was specified, load it now

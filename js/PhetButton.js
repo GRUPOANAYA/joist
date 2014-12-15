@@ -1,7 +1,10 @@
 // Copyright 2002-2013, University of Colorado Boulder
 
 /**
- * The button that pops up the PhET menu.
+ * The button that pops up the PhET menu, which appears in the bottom right of the home screen and on the right side
+ * of the navbar.
+ *
+ * @author Sam Reid
  */
 define( function( require ) {
   'use strict';
@@ -12,84 +15,37 @@ define( function( require ) {
   var FontAwesomeNode = require( 'SUN/FontAwesomeNode' );
   var inherit = require( 'PHET_CORE/inherit' );
   var PhetMenu = require( 'JOIST/PhetMenu' );
-  var Shape = require( 'KITE/Shape' );
-  var PushButtonDeprecated = require( 'SUN/PushButtonDeprecated' );
-  var HighlightNode = require( 'JOIST/HighlightNode' );
+  var Property = require( 'AXON/Property' );
+  var JoistButton = require( 'JOIST/JoistButton' );
 
   // images
   var phetLogo = require( 'image!BRAND/logo.png' );
   //Makes the 'h' a bit darker so it will show up better against a white background
   var phetLogoDarker = require( 'image!BRAND/logo-on-white.png' );
 
-  //TODO don't pass in navigationBar, position based on this button
   /**
-   *
-   * @param sim
-   * @param whiteColorScheme
-   * @param homeScreen flag that indicates whether this button appears in the home screen or navbar, to get the positioning right.  TODO: Get rid of the need for this flag.  See #114
-   * @param {Object} [options] Unused in client code.  TODO: Remove
+   * @param {Sim} sim
+   * @param {Object} [options] Unused in client code.
    * @constructor
    */
-  function PhetButton( sim, homeScreen, options ) {
+  function PhetButton( sim, options ) {
 
-    options = _.extend( {
-      phetLogoScale: 0.28,
-      optionsButtonVerticalMargin: 1.5
-    }, options );
+    // The PhET popup menu, which is created lazily when the button is pressed.
+    var phetMenu = null;
 
-    var phetLabel = new Image( phetLogo, {scale: options.phetLogoScale, pickable: false} );
-    sim.link( 'useInvertedColors', function( whiteColorScheme ) {
-      phetLabel.image = whiteColorScheme ? phetLogoDarker : phetLogo;
-    } );
-
-    var optionsButton = new FontAwesomeNode( 'reorder', {
-      scale: 0.6,
-      left: phetLabel.width + 10,
-      bottom: phetLabel.bottom - options.optionsButtonVerticalMargin,
-      pickable: false
-    } );
-    sim.link( 'useInvertedColors', function( whiteColorScheme ) {
-      optionsButton.fill = whiteColorScheme ? '#222' : 'white';
-    } );
-
-    var createNode = function( highlighted ) {
-      var node = new Node( {children: [phetLabel, optionsButton]} );
-
-      if ( highlighted ) {
-        var normalHighlight = new HighlightNode( node.width + 6, node.height + 5, {
-          centerX: node.centerX,
-          centerY: node.centerY + 4,
-          whiteHighlight: true
-        } );
-        var invertedHighlight = new HighlightNode( node.width + 6, node.height + 5, {
-          centerX: node.centerX,
-          centerY: node.centerY + 4,
-          whiteHighlight: false
-        } );
-        node.addChild( normalHighlight );
-        node.addChild( invertedHighlight );
-        sim.link( 'useInvertedColors', function( whiteColorScheme ) {
-          normalHighlight.visible = !whiteColorScheme;
-          invertedHighlight.visible = whiteColorScheme;
-        } );
-      }
-      return node;
-    };
-
-    //PushButtonDeprecated( upNode, overNode, downNode, disabledNode, options )
-    PushButtonDeprecated.call( this, createNode( false ), createNode( true ), createNode( true ), new Node() );
-
-    //When the phet button is pressed, show the phet menu
-    var phetButtonPressed = function() {
-
-      var phetMenu = new PhetMenu( sim, {
+    // When the PhET button is pressed, create the PhET popup menu
+    var initPhetMenu = function() {
+      phetMenu = new PhetMenu( sim, {
         showSaveAndLoad: sim.options.showSaveAndLoad,
         closeCallback: function() {
+
           // hides the popup and barrier background
           sim.hidePopup( phetMenu, true );
         }
       } );
+
       function onResize( bounds, screenBounds, scale ) {
+
         // because it starts at null
         if ( bounds ) {
           phetMenu.setScaleMagnitude( Math.max( 1, scale * 0.7 ) ); // minimum size for small devices
@@ -97,24 +53,59 @@ define( function( require ) {
           phetMenu.bottom = ( bounds.bottom + screenBounds.bottom ) / 2;
         }
       }
+
       sim.on( 'resized', onResize );
       onResize( sim.bounds, sim.screenBounds, sim.scale );
-
-      sim.showPopup( phetMenu, true );
     };
-    this.addListener( phetButtonPressed );
+    options = _.extend( {
+      ariaLabel: 'PhET Options',
+      phetLogoScale: 0.28, // {number}
+      highlightExtensionWidth: 6,
+      highlightExtensionHeight: 5,
+      highlightCenterOffsetY: 4,
+      listener: function() {
+        if ( phetMenu === null ) {
+          initPhetMenu();
+        }
 
-    this.addPeer( '<input type="button" aria-label="PhET Menu">', {click: phetButtonPressed, tabIndex: 101} );
+        // If the PhET menu wasn't showing, then show it now.
+        if ( phetMenu.parents.length === 0 ) {
+          sim.showPopup( phetMenu, true );
+        }
+        else {
 
-    // eliminate interactivity gap between label and button
-    this.mouseArea = this.touchArea = Shape.bounds( this.bounds );
+          // To support accessibility, allow a click event on this peer to hide the popup
+          // See https://github.com/phetsims/forces-and-motion-basics/issues/110
+          sim.hidePopup( phetMenu, true );
+        }
+      }
+    }, options );
 
-    if ( options ) {
-      this.mutate( options );
-    }
+    // The PhET Label, which is the PhET logo
+    var phetLabel = new Image( phetLogo, {
+      scale: options.phetLogoScale,
+      pickable: false
+    } );
+
+    var optionsButton = new FontAwesomeNode( 'reorder', {
+      scale: 0.6,
+      left: phetLabel.width + 10,
+      bottom: phetLabel.bottom - 1.5,
+      pickable: false
+    } );
+
+    // The icon combines the PhET label and the thre horizontal bars in the right relative positions
+    var icon = new Node( {children: [phetLabel, optionsButton]} );
+
+    JoistButton.call( this, icon, sim.useInvertedColorsProperty, options );
+
+    Property.multilink( [this.interactionStateProperty, sim.useInvertedColorsProperty], function( interactionState, useInvertedColors ) {
+      optionsButton.fill = useInvertedColors ? '#222' : 'white';
+      phetLabel.image = useInvertedColors ? phetLogoDarker : phetLogo;
+    } );
   }
 
-  return inherit( PushButtonDeprecated, PhetButton, {},
+  return inherit( JoistButton, PhetButton, {},
 
     //statics
     {
