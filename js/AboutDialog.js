@@ -132,6 +132,12 @@ define( function( require ) {
       children.push( new Text( thanksTitleString, { font: titleFont } ) );
       children.push( new MultiLineText( credits.thanks, multiLineTextOptions ) );
     }
+    //Source
+    if( credits.source ) {
+      if ( children.length > 0 ) { children.push( new VStrut( 10 ) ); }
+      children.push( new Text( "source code", { font: titleFont } ) );
+      children.push( new MultiLineText( credits.source, multiLineTextOptions ) );
+    }
 
     return new VBox( { align: 'left', spacing: 1, children: children } );
   };
